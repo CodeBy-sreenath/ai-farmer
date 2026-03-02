@@ -24,6 +24,13 @@ model = tf.keras.models.load_model("plant_disease_model.h5")
 with open("class_names.json", "r") as f:
     class_names = json.load(f)
 
+# Treatment dictionary
+treatment_map = {
+    "Pepper__bell___Bacterial_spot": "Spray copper-based fungicide every 7 days. Avoid overhead watering.",
+    "Tomato_Early_blight": "Remove infected leaves. Apply neem oil weekly.",
+    "Potato___Late_blight": "Use certified seeds. Spray fungicide immediately.",
+}
+
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     contents = await file.read()
@@ -42,7 +49,14 @@ async def predict(file: UploadFile = File(...)):
 
     predicted_class = class_names[predicted_index]
 
+    # Get treatment
+    treatment = treatment_map.get(
+        predicted_class,
+        "Consult a local agricultural expert for proper treatment guidance."
+    )
+
     return {
         "disease": predicted_class,
-        "confidence": confidence
+        "confidence": confidence,
+        "treatment": treatment
     }

@@ -44,5 +44,5 @@ next-env.d.ts
 ai-model/dataset/train/
 ai-model/dataset/validation/
 ai-model/venv/
-*.h5
-ai-model/*.h5
+#*.h5
+#ai-model/*.h5

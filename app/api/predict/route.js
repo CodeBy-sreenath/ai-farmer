@@ -32,7 +32,7 @@ export async function POST(req) {
     });*/
       // Call deployed FastAPI model
     const response = await fetch(
-      "https://ai-farmer-7.onrender.com/predict",
+      "https://ai-farmer-10.onrender.com/predict",
       {
         method: "POST",
         body: pythonFormData,

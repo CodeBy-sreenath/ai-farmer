@@ -5,10 +5,14 @@ import numpy as np
 from PIL import Image
 import io
 import json
+import os
 
 app = FastAPI()
 
-# Allow frontend access
+# ==============================
+# Enable CORS (Frontend access)
+# ==============================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,15 +21,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==============================
+# Load model and class names
+# ==============================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Load trained model
-model = tf.keras.models.load_model("plant_disease_model.h5")
+model = tf.keras.models.load_model(
+    os.path.join(BASE_DIR, "plant_disease_model.h5"),
+    compile=False
+)
 
 # Load class names
-with open("class_names.json", "r") as f:
+with open(os.path.join(BASE_DIR, "class_names.json"), "r") as f:
     class_names = json.load(f)
 
 # ==============================
-# Treatment dictionary (ALL 15)
+# Treatment dictionary
 # ==============================
 
 treatment_map = {
@@ -80,22 +93,32 @@ treatment_map = {
 }
 
 # ==============================
+# Root route (test API)
+# ==============================
+
+@app.get("/")
+def home():
+    return {"message": "AI Farmer API is running"}
+
+# ==============================
 # Prediction API
 # ==============================
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
+    
     contents = await file.read()
 
-    # Preprocess image
+    # Convert image
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     image = image.resize((224, 224))
 
+    # Preprocess
     img_array = np.array(image) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
     # Prediction
-    predictions = model.predict(img_array)
+    predictions = model.predict(img_array, verbose=0)
     predicted_index = str(np.argmax(predictions))
     confidence = float(np.max(predictions))
 

@@ -81,7 +81,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const t = content[lang];
 
-  const handleUpload = (file) => {
+  /*const handleUpload = (file) => {
     setLoading(true);
     setResult(null);
     setProgress(0);
@@ -105,7 +105,46 @@ export default function Home() {
       });
       setLoading(false);
     }, 2200);
-  };
+  };*/
+  const handleUpload = async (file) => {
+  setLoading(true);
+  setResult(null);
+  setProgress(0);
+
+  const imageUrl = URL.createObjectURL(file);
+  setPreview(imageUrl);
+
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/predict", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("Prediction failed");
+    }
+
+    const data = await response.json();
+
+    setResult({
+      disease: data.disease,
+      diseaseML: data.disease, // you can later translate
+      confidence: Math.round(data.confidence * 100),
+      treatment: data.treatment,
+      treatmentML: data.treatment,
+    });
+
+  } catch (error) {
+    console.error(error);
+    alert("Something went wrong!");
+  }
+
+  setLoading(false);
+};
+  
 
   return (
     <main style={{ fontFamily: "'Noto Sans Malayalam', 'Merriweather', Georgia, serif", minHeight: "100vh", background: "#0a1a0f", color: "#f0f7ee" }}>

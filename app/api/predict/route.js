@@ -1,5 +1,7 @@
-import connectDB from "@/lib/mongodb";
-import Prediction from "@/models/Prediction";
+import connectDB from "@/app/lib/mongodb";
+//import Prediction from "@/models/Prediction";
+
+import Prediction from "@/app/lib/models/Prediction";
 
 export async function POST(req) {
   try {

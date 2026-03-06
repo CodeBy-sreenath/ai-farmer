@@ -10,7 +10,7 @@ import os
 app = FastAPI(title="AI Farmer Plant Disease API")
 
 # ==============================
-# Enable CORS (Frontend access)
+# Enable CORS
 # ==============================
 
 app.add_middleware(
@@ -26,6 +26,7 @@ app.add_middleware(
 # ==============================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 MODEL_PATH = os.path.join(BASE_DIR, "plant_disease_model.h5")
 CLASS_PATH = os.path.join(BASE_DIR, "class_names.json")
 
@@ -44,71 +45,75 @@ def load_model():
     global class_names
 
     try:
+
+        print("Loading model from:", MODEL_PATH)
+
         model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
         with open(CLASS_PATH, "r") as f:
             class_names = json.load(f)
 
-        print("✅ Model and classes loaded successfully")
+        print("✅ Model loaded successfully")
 
     except Exception as e:
-        print("❌ Error loading model:", e)
+
+        print("❌ Model loading failed:", e)
+
+        model = None
+        class_names = None
 
 
 # ==============================
-# Treatment dictionary
+# Treatment Map
 # ==============================
 
 treatment_map = {
-
-    # Pepper
     "Pepper__bell___Bacterial_spot":
-        "Spray copper-based bactericide every 7 days. Avoid overhead irrigation and remove infected leaves.",
+    "Spray copper-based bactericide every 7 days.",
 
     "Pepper__bell___healthy":
-        "Plant is healthy. Maintain proper watering and balanced fertilizer for continued growth.",
+    "Plant is healthy. Maintain proper watering.",
 
-    # Potato
     "Potato___Early_blight":
-        "Remove infected leaves immediately. Apply fungicide containing chlorothalonil or mancozeb every 7–10 days.",
+    "Apply fungicide containing chlorothalonil.",
 
     "Potato___Late_blight":
-        "Use certified disease-free seeds. Apply systemic fungicide immediately and improve air circulation.",
+    "Apply systemic fungicide immediately.",
 
     "Potato___healthy":
-        "Plant is healthy. Maintain proper soil moisture and apply balanced NPK fertilizer.",
+    "Plant is healthy. Maintain soil moisture.",
 
-    # Tomato
     "Tomato_Bacterial_spot":
-        "Spray copper-based bactericide. Avoid working with wet plants and remove infected foliage.",
+    "Spray copper bactericide.",
 
     "Tomato_Early_blight":
-        "Remove lower infected leaves. Apply fungicide weekly and use crop rotation next season.",
+    "Apply fungicide weekly.",
 
     "Tomato_Late_blight":
-        "Apply fungicide immediately. Remove infected plants and avoid overhead watering.",
+    "Remove infected plants immediately.",
 
     "Tomato_Leaf_Mold":
-        "Improve air circulation and reduce humidity. Apply fungicide if infection spreads.",
+    "Reduce humidity and improve airflow.",
 
     "Tomato_Septoria_leaf_spot":
-        "Remove infected leaves. Apply protective fungicide and avoid splashing water on leaves.",
+    "Remove infected leaves.",
 
     "Tomato_Spider_mites_Two_spotted_spider_mite":
-        "Spray neem oil or insecticidal soap. Increase humidity and remove heavily infested leaves.",
+    "Spray neem oil.",
 
     "Tomato_Target_Spot":
-        "Remove infected leaves. Apply fungicide and ensure proper spacing between plants.",
+    "Apply fungicide.",
 
     "Tomato_Tomato_mosaic_virus":
-        "Remove infected plants immediately. Disinfect tools and avoid tobacco contamination.",
+    "Remove infected plants.",
 
     "Tomato_Tomato_YellowLeaf_Curl_Virus":
-        "Control whiteflies using insecticides. Remove infected plants and use resistant varieties.",
+    "Control whiteflies.",
 
     "Tomato_healthy":
-        "Plant is healthy. Continue regular watering, proper sunlight, and balanced fertilization.",
+    "Plant is healthy."
 }
+
 
 # ==============================
 # Root Route
@@ -118,13 +123,19 @@ treatment_map = {
 def home():
     return {"message": "🌱 AI Farmer API is running"}
 
+
 # ==============================
 # Health Check
 # ==============================
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+
+    if model is None:
+        return {"status": "error", "model": "not loaded"}
+
+    return {"status": "ok", "model": "loaded"}
+
 
 # ==============================
 # Prediction API
@@ -140,26 +151,22 @@ async def predict(file: UploadFile = File(...)):
 
         contents = await file.read()
 
-        # Convert image
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         image = image.resize((224, 224))
 
-        # Preprocess
         img_array = np.array(image) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
 
-        # Prediction
-        predictions = model.predict(img_array, verbose=0)
+        predictions = model.predict(img_array)
 
-        predicted_index = str(np.argmax(predictions))
+        predicted_index = int(np.argmax(predictions))
         confidence = float(np.max(predictions))
 
-        predicted_class = class_names[predicted_index]
+        predicted_class = class_names[str(predicted_index)]
 
-        # Treatment
         treatment = treatment_map.get(
             predicted_class,
-            "Consult a local agricultural expert for proper treatment guidance."
+            "Consult agricultural expert"
         )
 
         return {

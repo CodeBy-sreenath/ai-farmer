@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import tensorflow as tf
 import numpy as np
@@ -7,7 +7,7 @@ import io
 import json
 import os
 
-app = FastAPI()
+app = FastAPI(title="AI Farmer Plant Disease API")
 
 # ==============================
 # Enable CORS (Frontend access)
@@ -22,20 +22,38 @@ app.add_middleware(
 )
 
 # ==============================
-# Load model and class names
+# Paths
 # ==============================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "plant_disease_model.h5")
+CLASS_PATH = os.path.join(BASE_DIR, "class_names.json")
 
-# Load trained model
-model = tf.keras.models.load_model(
-    os.path.join(BASE_DIR, "plant_disease_model.h5"),
-    compile=False
-)
+model = None
+class_names = None
 
-# Load class names
-with open(os.path.join(BASE_DIR, "class_names.json"), "r") as f:
-    class_names = json.load(f)
+
+# ==============================
+# Load Model at Startup
+# ==============================
+
+@app.on_event("startup")
+def load_model():
+
+    global model
+    global class_names
+
+    try:
+        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+
+        with open(CLASS_PATH, "r") as f:
+            class_names = json.load(f)
+
+        print("✅ Model and classes loaded successfully")
+
+    except Exception as e:
+        print("❌ Error loading model:", e)
+
 
 # ==============================
 # Treatment dictionary
@@ -93,12 +111,20 @@ treatment_map = {
 }
 
 # ==============================
-# Root route (test API)
+# Root Route
 # ==============================
 
 @app.get("/")
 def home():
-    return {"message": "AI Farmer API is running"}
+    return {"message": "🌱 AI Farmer API is running"}
+
+# ==============================
+# Health Check
+# ==============================
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 # ==============================
 # Prediction API
@@ -106,32 +132,46 @@ def home():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    
-    contents = await file.read()
 
-    # Convert image
-    image = Image.open(io.BytesIO(contents)).convert("RGB")
-    image = image.resize((224, 224))
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
 
-    # Preprocess
-    img_array = np.array(image) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    try:
 
-    # Prediction
-    predictions = model.predict(img_array, verbose=0)
-    predicted_index = str(np.argmax(predictions))
-    confidence = float(np.max(predictions))
+        contents = await file.read()
 
-    predicted_class = class_names[predicted_index]
+        # Convert image
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        image = image.resize((224, 224))
 
-    # Get treatment
-    treatment = treatment_map.get(
-        predicted_class,
-        "Consult a local agricultural expert for proper treatment guidance."
-    )
+        # Preprocess
+        img_array = np.array(image) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
 
-    return {
-        "disease": predicted_class,
-        "confidence": confidence,
-        "treatment": treatment
-    }
+        # Prediction
+        predictions = model.predict(img_array, verbose=0)
+
+        predicted_index = str(np.argmax(predictions))
+        confidence = float(np.max(predictions))
+
+        predicted_class = class_names[predicted_index]
+
+        # Treatment
+        treatment = treatment_map.get(
+            predicted_class,
+            "Consult a local agricultural expert for proper treatment guidance."
+        )
+
+        return {
+            "success": True,
+            "disease": predicted_class,
+            "confidence": round(confidence * 100, 2),
+            "treatment": treatment
+        }
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {str(e)}"
+        )
